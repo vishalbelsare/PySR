@@ -1,4 +1,5 @@
 """Define the PySRRegressor scikit-learn interface."""
+
 import copy
 import os
 import pickle as pkl
@@ -1652,9 +1653,9 @@ class PySRRegressor(MultiOutputMixin, RegressorMixin, BaseEstimator):
             fraction_replaced_hof=self.fraction_replaced_hof,
             should_simplify=self.should_simplify,
             should_optimize_constants=self.should_optimize_constants,
-            warmup_maxsize_by=0.0
-            if self.warmup_maxsize_by is None
-            else self.warmup_maxsize_by,
+            warmup_maxsize_by=(
+                0.0 if self.warmup_maxsize_by is None else self.warmup_maxsize_by
+            ),
             use_frequency=self.use_frequency,
             use_frequency_in_tournament=self.use_frequency_in_tournament,
             adaptive_parsimony_scaling=self.adaptive_parsimony_scaling,
