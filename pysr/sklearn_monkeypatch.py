@@ -3,7 +3,8 @@
 from sklearn.utils import validation
 
 
-def _ensure_no_complex_data(*args, **kwargs): ...
+def _ensure_no_complex_data(*args, **kwargs):
+    ...
 
 
 try:
