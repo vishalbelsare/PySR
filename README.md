@@ -11,7 +11,7 @@ https://github.com/MilesCranmer/PySR/assets/7593028/c8511a49-b408-488f-8f18-b174
 
 | **Docs** | **Forums** | **Paper** | **colab demo** |
 |:---:|:---:|:---:|:---:|
-|[![Documentation](https://github.com/MilesCranmer/PySR/actions/workflows/docs.yml/badge.svg)](https://astroautomata.com/PySR/)|[![Discussions](https://img.shields.io/badge/discussions-github-informational)](https://github.com/MilesCranmer/PySR/discussions)|[![Paper](https://img.shields.io/badge/arXiv-2305.01582-b31b1b)](https://arxiv.org/abs/2305.01582)|[![Colab](https://img.shields.io/badge/colab-notebook-yellow)](https://colab.research.google.com/github/MilesCranmer/PySR/blob/master/examples/pysr_demo.ipynb)|
+|[![Documentation](https://github.com/MilesCranmer/PySR/actions/workflows/docs.yml/badge.svg)](https://ai.damtp.cam.ac.uk/pysr/)|[![Discussions](https://img.shields.io/badge/discussions-github-informational)](https://github.com/MilesCranmer/PySR/discussions)|[![Paper](https://img.shields.io/badge/arXiv-2305.01582-b31b1b)](https://arxiv.org/abs/2305.01582)|[![Colab](https://img.shields.io/badge/colab-notebook-yellow)](https://colab.research.google.com/github/MilesCranmer/PySR/blob/master/examples/pysr_demo.ipynb)|
 
 | **pip** | **conda** | **Stats** |
 | :---: | :---: | :---: |
@@ -20,14 +20,14 @@ https://github.com/MilesCranmer/PySR/assets/7593028/c8511a49-b408-488f-8f18-b174
 </div>
 
 If you find PySR useful, please cite the paper [arXiv:2305.01582](https://arxiv.org/abs/2305.01582).
-If you've finished a project with PySR, please submit a PR to showcase your work on the [research showcase page](https://astroautomata.com/PySR/papers)!
+If you've finished a project with PySR, please submit a PR to showcase your work on the [research showcase page](https://ai.damtp.cam.ac.uk/pysr/papers)!
 
 **Contents**:
 
 - [Why PySR?](#why-pysr)
 - [Installation](#installation)
 - [Quickstart](#quickstart)
-- [→ Documentation](https://astroautomata.com/PySR)
+- [→ Documentation](https://ai.damtp.cam.ac.uk/pysr)
 - [Contributors](#contributors-)
 
 <div align="center">
@@ -83,8 +83,12 @@ Similarly, with conda:
 conda install -c conda-forge pysr
 ```
 
+<details>
+<summary>
 
 ### Docker
+
+</summary>
 
 You can also use the `Dockerfile` to install PySR in a docker container
 
@@ -100,9 +104,38 @@ docker run -it --rm pysr ipython
 
 For more details, see the [docker section](#docker).
 
----
+</details>
+
+<details>
+<summary>
+
+### Apptainer
+
+</summary>
+
+If you are using PySR on a cluster where you do not have root access,
+you can use [Apptainer](https://apptainer.org/) to build a container
+instead of Docker. The `Apptainer.def` file is analogous to the `Dockerfile`,
+and can be built with:
+
+```bash
+apptainer build --notest pysr.sif Apptainer.def
+```
+
+and launched with
+
+```bash
+apptainer run pysr.sif
+```
+
+</details>
+
+<details>
+<summary>
 
 ### Troubleshooting
+
+</summary>
 
 One issue you might run into can result in a hard crash at import with
 a message like "`GLIBCXX_...` not found". This is due to another one of the Python dependencies
@@ -116,6 +149,8 @@ export LD_LIBRARY_PATH=$HOME/.julia/juliaup/julia-1.10.0+0.x64.linux.gnu/lib/jul
 ```
 
 to your `.bashrc` or `.zshrc` file.
+
+</details>
 
 
 ## Quickstart
@@ -143,6 +178,7 @@ PySR's main interface is in the style of scikit-learn:
 from pysr import PySRRegressor
 
 model = PySRRegressor(
+    maxsize=20,
     niterations=40,  # < Increase me for better results
     binary_operators=["+", "*"],
     unary_operators=[
@@ -219,22 +255,21 @@ model = PySRRegressor.from_file("hall_of_fame.2022-08-10_100832.281.pkl")
 
 There are several other useful features such as denoising (e.g., `denoise=True`),
 feature selection (e.g., `select_k_features=3`).
-For examples of these and other features, see the [examples page](https://astroautomata.com/PySR/examples).
-For a detailed look at more options, see the [options page](https://astroautomata.com/PySR/options).
-You can also see the full API at [this page](https://astroautomata.com/PySR/api).
-There are also tips for tuning PySR on [this page](https://astroautomata.com/PySR/tuning).
+For examples of these and other features, see the [examples page](https://ai.damtp.cam.ac.uk/pysr/examples).
+For a detailed look at more options, see the [options page](https://ai.damtp.cam.ac.uk/pysr/options).
+You can also see the full API at [this page](https://ai.damtp.cam.ac.uk/pysr/api).
+There are also tips for tuning PySR on [this page](https://ai.damtp.cam.ac.uk/pysr/tuning).
 
 ### Detailed Example
 
 The following code makes use of as many PySR features as possible.
 Note that is just a demonstration of features and you should not use this example as-is.
-For details on what each parameter does, check out the [API page](https://astroautomata.com/PySR/api/).
+For details on what each parameter does, check out the [API page](https://ai.damtp.cam.ac.uk/pysr/api/).
 
 ```python
 model = PySRRegressor(
-    procs=4,
     populations=8,
-    # ^ 2 populations per core, so one is always running.
+    # ^ Assuming we have 4 cores, this means 2 populations per core, so one is always running.
     population_size=50,
     # ^ Slightly larger populations, for greater diversity.
     ncycles_per_iteration=500,
@@ -289,11 +324,6 @@ model = PySRRegressor(
     # ^ Start from where left off.
     turbo=True,
     # ^ Faster evaluation (experimental)
-    julia_project=None,
-    # ^ Can set to the path of a folder containing the
-    # "SymbolicRegression.jl" repo, for custom modifications.
-    update=False,
-    # ^ Don't update Julia packages
     extra_sympy_mappings={"cos2": lambda x: sympy.cos(x)**2},
     # extra_torch_mappings={sympy.cos: torch.cos},
     # ^ Not needed as cos already defined, but this
@@ -314,9 +344,14 @@ docker build -t pysr .
 ```
 
 This builds an image called `pysr` for your system's architecture,
-which also contains IPython.
+which also contains IPython. You can select a specific version
+of Python and Julia with:
 
-You can then run this with:
+```bash
+docker build -t pysr --build-arg JLVERSION=1.10.0 --build-arg PYVERSION=3.11.6 .
+```
+
+You can then run with this dockerfile using:
 
 ```bash
 docker run -it --rm -v "$PWD:/data" pysr ipython

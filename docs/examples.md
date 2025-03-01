@@ -345,7 +345,7 @@ a real number from the loss function). But, you don't need to worry about this, 
 make sure to return a scalar number of type `L`.
 
 The `tree` argument is the current expression being evaluated. You can read
-about the `tree` fields [here](https://astroautomata.com/SymbolicRegression.jl/stable/types/).
+about the `tree` fields [here](https://ai.damtp.cam.ac.uk/symbolicregression/stable/types/).
 
 For example, let's fix a symbolic form of an expression,
 as a rational function. i.e., $P(X)/Q(X)$ for polynomials $P$ and $Q$.
@@ -428,7 +428,7 @@ the evaluation, as we simply evaluated each argument and divided the result) int
 `((2.3554819 + -0.3554746) - (x1 * (x0 * x0)))` and
 `(-1.0000019 - (x2 * x2))`, meaning that our discovered equation is
 equal to:
-$\frac{x_0^2 x_1 - 2.0000073}{x_2^2 - 1.0000019}$, which
+$\frac{x_0^2 x_1 - 2.0000073}{x_2^2 + 1.0000019}$, which
 is nearly the same as the true equation!
 
 ## 10. Dimensional constraints
@@ -520,8 +520,195 @@ a constant `"2.6353e-22[m s⁻²]"`.
 
 Note that this expression has a large dynamic range so may be difficult to find. Consider searching with a larger `niterations` if needed.
 
+Note that you can also search for exclusively dimensionless constants by settings
+`dimensionless_constants_only` to `true`.
 
-## 11. Additional features
+## 11. Expression Specifications
+
+PySR 1.0 introduces powerful expression specifications that allow you to define structured equations. Here are two examples:
+
+### Template Expressions
+
+`TemplateExpressionSpec` allows you to define a specific structure for the equation.
+For example, let's say we want to learn an equation of the form:
+
+$$ y = \sin(f(x_1, x_2)) + g(x_3) $$
+
+We can do this as follows:
+
+```python
+import numpy as np
+from pysr import PySRRegressor, TemplateExpressionSpec
+
+# Create data
+X = np.random.randn(1000, 3)
+y = np.sin(X[:, 0] + X[:, 1]) + X[:, 2]**2
+
+# Define template: we want sin(f(x1, x2)) + g(x3)
+template = TemplateExpressionSpec(
+    expressions=["f", "g"],
+    variable_names=["x1", "x2", "x3"],
+    combine="sin(f(x1, x2)) + g(x3)",
+)
+
+model = PySRRegressor(
+    expression_spec=template,
+    binary_operators=["+", "*", "-", "/"],
+    unary_operators=["sin"],
+    maxsize=10,
+)
+model.fit(X, y)
+```
+
+You can also use parameters in your template expressions, which will be optimized during the search:
+
+```python
+template = TemplateExpressionSpec(
+    expressions=["f", "g"],
+    variable_names=["x1", "x2", "x3"],
+    parameters={"p1": 2, "p2": 1},  # p1 has length 2, p2 has length 1
+    combine="p1[1] * sin(f(x1, x2)) + p1[2] * g(x3) + p2[1]",
+)
+```
+
+This will learn an equation of the form:
+
+$$ y = \alpha_1 \sin(f(x_1, x_2)) + \alpha_2 g(x_3) + \beta $$
+
+where $\alpha_1, \alpha_2$ are stored in `p1` and $\beta$ is stored in `p2`. The parameters will be optimized during the search.
+
+### Parametric Expressions
+
+When your data has categories with shared equation structure but different parameters,
+you can use a `ParametricExpressionSpec`. Let's say we would like to learn the expression:
+
+$$ y = \alpha \sin(x_1) + \beta $$
+
+for three different values of $\alpha$ and $\beta$.
+
+```python
+import numpy as np
+from pysr import PySRRegressor, ParametricExpressionSpec
+
+# Create data with 3 categories
+X = np.random.uniform(-3, 3, (1000, 2))
+category = np.random.randint(0, 3, 1000)
+
+# Parameters for each category
+offsets = [0.1, 1.5, -0.5]
+scales = [1.0, 2.0, 0.5]
+
+# y = scale[category] * sin(x1) + offset[category]
+y = np.array([
+    scales[c] * np.sin(x1) + offsets[c]
+    for x1, c in zip(X[:, 0], category)
+])
+
+model = PySRRegressor(
+    expression_spec=ParametricExpressionSpec(max_parameters=2),
+    binary_operators=["+", "*", "-", "/"],
+    unary_operators=["sin"],
+    maxsize=10,
+)
+model.fit(X, y, category=category)
+
+# Predicting on new data:
+# model.predict(X_test, category=category_test)
+```
+
+See [Expression Specifications](/api/#expression-specifications) for more details.
+
+You can also use `TemplateExpressionSpec` in the same way, passing
+the category as a column of `X`:
+
+```python
+spec = TemplateExpressionSpec(
+    expressions=["f", "g"],
+    variable_names=["x1", "x2", "class"],
+    parameters={"p1": 3, "p2": 1},
+    combine="p1[class] * sin(f(x1, x2)) + p2[class]",
+)
+```
+
+this column will automatically be converted to integers.
+
+
+## 12. Using TensorBoard for Logging
+
+You can use TensorBoard to visualize the search progress, as well as
+record hyperparameters and final metrics (like `min_loss` and `pareto_volume` - the latter of which
+is a performance measure of the entire Pareto front).
+
+```python
+import numpy as np
+from pysr import PySRRegressor, TensorBoardLoggerSpec
+
+rstate = np.random.RandomState(42)
+
+# Uniform dist between -3 and 3:
+X = rstate.uniform(-3, 3, (1000, 2))
+y = np.exp(X[:, 0]) + X[:, 1]
+
+# Create a logger that writes to "logs/run*":
+logger_spec = TensorBoardLoggerSpec(
+    log_dir="logs/run",
+    log_interval=10,  # Log every 10 iterations
+)
+
+model = PySRRegressor(
+    binary_operators=["+", "*", "-", "/"],
+    logger_spec=logger_spec,
+)
+model.fit(X, y)
+```
+
+You can then view the logs with:
+
+```bash
+tensorboard --logdir logs/
+```
+
+## 13. Using differential operators
+
+As part of the `TemplateExpressionSpec` described above,
+you can also use differential operators within the template.
+The operator for this is `D` which takes an expression as the first argument,
+and the argument _index_ we are differentiating as the second argument.
+This lets you compute integrals via evolution.
+
+For example, let's say we wish to find the integral of $\frac{1}{x^2 \sqrt{x^2 - 1}}$
+in the range $x > 1$.
+We can compute the derivative of a function $f(x)$, and compare that
+to numerical samples of $\frac{1}{x^2\sqrt{x^2-1}}$. Then, by extension,
+$f(x)$ represents the indefinite integral of it with some constant offset!
+
+```python
+import numpy as np
+from pysr import PySRRegressor, TemplateExpressionSpec
+
+x = np.random.uniform(1, 10, (1000,))  # Integrand sampling points
+y = 1 / (x**2 * np.sqrt(x**2 - 1))     # Evaluation of the integrand
+
+expression_spec = TemplateExpressionSpec(
+    expressions=["f"],
+    variable_names=["x"],
+    combine="df = D(f, 1); df(x)",
+)
+
+model = PySRRegressor(
+    binary_operators=["+", "-", "*", "/"],
+    unary_operators=["sqrt"],
+    expression_spec=expression_spec,
+    maxsize=20,
+)
+model.fit(x[:, np.newaxis], y)
+```
+
+If everything works, you should find something that simplifies to $\frac{\sqrt{x^2 - 1}}{x}$.
+
+Here, we write out a full function in Julia.
+
+## 14. Additional features
 
 For the many other features available in PySR, please
 read the [Options section](options.md).

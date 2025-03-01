@@ -23,3 +23,7 @@ site
 **/*.code-workspace
 **/*.tar.gz
 venv
+requirements-dev.lock
+requirements.lock
+outputs
+.mypy_cache
