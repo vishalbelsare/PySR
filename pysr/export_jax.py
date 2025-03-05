@@ -1,4 +1,6 @@
-import sympy
+import numpy as np  # noqa: F401
+import sympy  # type: ignore
+from sympy.codegen.cfunctions import log2, log10  # type: ignore
 
 # Special since need to reduce arguments.
 MUL = 0
@@ -14,6 +16,8 @@ _jnp_func_lookup = {
     sympy.ceiling: "jnp.ceil",
     sympy.floor: "jnp.floor",
     sympy.log: "jnp.log",
+    log2: "jnp.log2",
+    log10: "jnp.log10",
     sympy.exp: "jnp.exp",
     sympy.sqrt: "jnp.sqrt",
     sympy.cos: "jnp.cos",
@@ -55,7 +59,9 @@ def sympy2jaxtext(expr, parameters, symbols_in, extra_jax_mappings=None):
     if issubclass(expr.func, sympy.Float):
         parameters.append(float(expr))
         return f"parameters[{len(parameters) - 1}]"
-    elif issubclass(expr.func, sympy.Rational):
+    elif issubclass(expr.func, sympy.Rational) or issubclass(
+        expr.func, sympy.NumberSymbol
+    ):
         return f"{float(expr)}"
     elif issubclass(expr.func, sympy.Integer):
         return f"{int(expr)}"

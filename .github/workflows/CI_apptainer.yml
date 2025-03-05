@@ -1,4 +1,4 @@
-name: Docker
+name: Apptainer
 
 on:
   push:
@@ -24,11 +24,17 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest]
-        arch: ['linux/amd64']
 
     steps:
       - uses: actions/checkout@v4
-      - name: Build docker
-        run: docker build --platform=${{ matrix.arch }} -t pysr .
-      - name: Test docker
-        run: docker run --platform=${{ matrix.arch }} --rm pysr /bin/bash -c 'pip install pytest nbval && python3 -m pysr test main,cli,startup'
+      - uses: eWaterCycle/setup-apptainer@v2
+        with:
+            apptainer-version: 1.3.0
+      - name: Build apptainer
+        run: sudo apptainer build --notest pysr.sif Apptainer.def
+      - name: Test apptainer
+        run: |
+          TMPDIR=$(mktemp -d)
+          cp pysr.sif $TMPDIR
+          cd $TMPDIR
+          sudo apptainer test ./pysr.sif

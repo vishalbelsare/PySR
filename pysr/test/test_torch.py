@@ -1,10 +1,12 @@
 import unittest
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
-import sympy
+import sympy  # type: ignore
 
-from .. import PySRRegressor, sympy2torch
+import pysr
+from pysr import PySRRegressor, sympy2torch
 
 
 class TestTorch(unittest.TestCase):
@@ -47,11 +49,12 @@ class TestTorch(unittest.TestCase):
             }
         )
 
-        equations["Complexity Loss Equation".split(" ")].to_csv(
-            "equation_file.csv.bkup"
-        )
+        for fname in ["hall_of_fame.csv.bak", "hall_of_fame.csv"]:
+            equations["Complexity Loss Equation".split(" ")].to_csv(
+                Path(model.output_directory_) / model.run_id_ / fname
+            )
 
-        model.refresh(checkpoint_file="equation_file.csv")
+        model.refresh(run_directory=str(Path(model.output_directory_) / model.run_id_))
         tformat = model.pytorch()
         self.assertEqual(str(tformat), "_SingleSymPyModule(expression=cos(x1)**2)")
 
@@ -80,11 +83,12 @@ class TestTorch(unittest.TestCase):
             }
         )
 
-        equations["Complexity Loss Equation".split(" ")].to_csv(
-            "equation_file.csv.bkup"
-        )
+        for fname in ["hall_of_fame.csv.bak", "hall_of_fame.csv"]:
+            equations["Complexity Loss Equation".split(" ")].to_csv(
+                Path(model.output_directory_) / model.run_id_ / fname
+            )
 
-        model.refresh(checkpoint_file="equation_file.csv")
+        model.refresh(run_directory=str(Path(model.output_directory_) / model.run_id_))
 
         tformat = model.pytorch()
         self.assertEqual(str(tformat), "_SingleSymPyModule(expression=cos(x1)**2)")
@@ -132,31 +136,69 @@ class TestTorch(unittest.TestCase):
             }
         )
 
-        equations["Complexity Loss Equation".split(" ")].to_csv(
-            "equation_file_custom_operator.csv.bkup"
-        )
+        for fname in ["hall_of_fame.csv.bak", "hall_of_fame.csv"]:
+            equations["Complexity Loss Equation".split(" ")].to_csv(
+                Path(model.output_directory_) / model.run_id_ / fname
+            )
+
+        MyCustomOperator = sympy.Function("mycustomoperator")
 
         model.set_params(
-            equation_file="equation_file_custom_operator.csv",
-            extra_sympy_mappings={"mycustomoperator": sympy.sin},
-            extra_torch_mappings={"mycustomoperator": self.torch.sin},
+            extra_sympy_mappings={"mycustomoperator": MyCustomOperator},
+            extra_torch_mappings={MyCustomOperator: self.torch.sin},
         )
-        model.refresh(checkpoint_file="equation_file_custom_operator.csv")
-        self.assertEqual(str(model.sympy()), "sin(x1)")
+        # TODO: We shouldn't need to specify the run directory here.
+        model.refresh(run_directory=str(Path(model.output_directory_) / model.run_id_))
+        # self.assertEqual(str(model.sympy()), "sin(x1)")
         # Will automatically use the set global state from get_hof.
 
         tformat = model.pytorch()
-        self.assertEqual(str(tformat), "_SingleSymPyModule(expression=sin(x1))")
+        self.assertEqual(
+            str(tformat), "_SingleSymPyModule(expression=mycustomoperator(x1))"
+        )
         np.testing.assert_almost_equal(
             tformat(self.torch.tensor(X)).detach().numpy(),
             np.sin(X[:, 1]),
             decimal=3,
         )
 
+    def test_avoid_simplification(self):
+        # SymPy should not simplify without permission
+        torch = self.torch
+        ex = pysr.export_sympy.pysr2sympy(
+            "square(exp(sign(0.44796443))) + 1.5 * x1",
+            # ^ Normally this would become exp1 and require
+            #   its own mapping
+            feature_names_in=["x1"],
+            extra_sympy_mappings={"square": lambda x: x**2},
+        )
+        m = pysr.export_torch.sympy2torch(ex, ["x1"])
+        rng = np.random.RandomState(0)
+        X = rng.randn(10, 1)
+        np.testing.assert_almost_equal(
+            m(torch.tensor(X)).detach().numpy(),
+            np.square(np.exp(np.sign(0.44796443))) + 1.5 * X[:, 0],
+            decimal=3,
+        )
+
+    def test_issue_656(self):
+        # Should correctly map numeric symbols to floats
+        E_plus_x1 = sympy.exp(1) + sympy.symbols("x1")
+        m = pysr.export_torch.sympy2torch(E_plus_x1, ["x1"])
+        X = np.random.randn(10, 1)
+        np.testing.assert_almost_equal(
+            m(self.torch.tensor(X)).detach().numpy(),
+            np.exp(1) + X[:, 0],
+            decimal=3,
+        )
+
     def test_feature_selection_custom_operators(self):
         rstate = np.random.RandomState(0)
         X = pd.DataFrame({f"k{i}": rstate.randn(2000) for i in range(10, 21)})
-        cos_approx = lambda x: 1 - (x**2) / 2 + (x**4) / 24 + (x**6) / 720
+
+        def cos_approx(x):
+            return 1 - (x**2) / 2 + (x**4) / 24 + (x**6) / 720
+
         y = X["k15"] ** 2 + 2 * cos_approx(X["k20"])
 
         model = PySRRegressor(
@@ -166,11 +208,9 @@ class TestTorch(unittest.TestCase):
             maxsize=10,
             early_stop_condition=1e-5,
             extra_sympy_mappings={"cos_approx": cos_approx},
-            extra_torch_mappings={"cos_approx": cos_approx},
             random_state=0,
             deterministic=True,
-            procs=0,
-            multithreading=False,
+            parallelism="serial",
         )
         np.random.seed(0)
         model.fit(X.values, y.values)

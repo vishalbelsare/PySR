@@ -1,12 +1,11 @@
-#####
-# From https://github.com/patrick-kidger/sympytorch
-# Copied here to allow PySR-specific tweaks
-#####
+# Fork of https://github.com/patrick-kidger/sympytorch
 
 import collections as co
 import functools as ft
 
-import sympy
+import numpy as np  # noqa: F401
+import sympy  # type: ignore
+from sympy.codegen.cfunctions import log2, log10  # type: ignore
 
 
 def _reduce(fn):
@@ -43,6 +42,8 @@ def _initialize_torch():
             sympy.ceiling: torch.ceil,
             sympy.floor: torch.floor,
             sympy.log: torch.log,
+            log2: torch.log2,
+            log10: torch.log10,
             sympy.exp: torch.exp,
             sympy.sqrt: torch.sqrt,
             sympy.cos: torch.cos,
@@ -84,7 +85,7 @@ def _initialize_torch():
         }
 
         class _Node(torch.nn.Module):
-            """SympyTorch code from https://github.com/patrick-kidger/sympytorch"""
+            """Forked from https://github.com/patrick-kidger/sympytorch"""
 
             def __init__(self, *, expr, _memodict, _func_lookup, **kwargs):
                 super().__init__(**kwargs)
@@ -114,6 +115,11 @@ def _initialize_torch():
                     # Can get here if expr is one of the Integer special cases,
                     # e.g. NegativeOne
                     self._value = int(expr)
+                    self._torch_func = lambda: self._value
+                    self._args = ()
+                elif issubclass(expr.func, sympy.NumberSymbol):
+                    # Can get here from exp(1) or exact pi
+                    self._value = float(expr)
                     self._torch_func = lambda: self._value
                     self._args = ()
                 elif issubclass(expr.func, sympy.Symbol):
@@ -156,7 +162,7 @@ def _initialize_torch():
                 return self._torch_func(*args)
 
         class _SingleSymPyModule(torch.nn.Module):
-            """SympyTorch code from https://github.com/patrick-kidger/sympytorch"""
+            """Forked from https://github.com/patrick-kidger/sympytorch"""
 
             def __init__(
                 self, expression, symbols_in, selection=None, extra_funcs=None, **kwargs

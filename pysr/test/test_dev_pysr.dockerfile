@@ -2,8 +2,8 @@
 # tries to manually edit SymbolicRegression.jl and
 # use it from PySR.
 
-ARG JLVERSION=1.9.4
-ARG PYVERSION=3.11.6
+ARG JLVERSION=1.11.1
+ARG PYVERSION=3.12.6
 ARG BASE_IMAGE=bullseye
 
 FROM julia:${JLVERSION}-${BASE_IMAGE} AS jl
@@ -14,10 +14,6 @@ COPY --from=jl /usr/local/julia /usr/local/julia
 ENV PATH="/usr/local/julia/bin:${PATH}"
 
 WORKDIR /pysr
-
-# Caches install (https://stackoverflow.com/questions/25305788/how-to-avoid-reinstalling-packages-when-building-docker-image-for-python-project)
-ADD ./requirements.txt /pysr/requirements.txt
-RUN pip3 install --no-cache-dir -r /pysr/requirements.txt
 
 # Install PySR:
 # We do a minimal copy so it doesn't need to rerun at every file change:
@@ -32,8 +28,6 @@ RUN mkdir /pysr/pysr/_cli
 ADD ./pysr/_cli/*.py /pysr/pysr/_cli/
 
 RUN mkdir /pysr/pysr/test
-
-RUN pip3 install --no-cache-dir .
 
 # Now, we create a custom version of SymbolicRegression.jl
 # First, we get the version from juliapkg.json:
@@ -53,5 +47,5 @@ RUN sed -i 's/module SymbolicRegression/module SymbolicRegression\n__test_functi
 ADD ./pysr/test/generate_dev_juliapkg.py /generate_dev_juliapkg.py
 RUN python3 /generate_dev_juliapkg.py /pysr/pysr/juliapkg.json /srjl
 
-# Precompile
-RUN python3 -c 'import pysr'
+# Install and pre-compile
+RUN pip3 install --no-cache-dir . && python3 -c 'import pysr'
